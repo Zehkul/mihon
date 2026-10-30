@@ -10,6 +10,7 @@ import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.extension.interactor.TrustExtension
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.track.interactor.AddTracks
+import eu.kanade.domain.source.service.SourceProgressFlushWorker
 import eu.kanade.domain.track.service.DelayedTrackingUpdateWorker
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.domain.ui.UiPreferences
@@ -72,6 +73,7 @@ interface AppGraph : ViewModelGraph {
     fun inject(backupRestoreWorker: BackupRestoreWorker)
     fun inject(backupCreateWorker: BackupCreateWorker)
     fun inject(delayedTrackingUpdateWorker: DelayedTrackingUpdateWorker)
+    fun inject(sourceProgressFlushWorker: SourceProgressFlushWorker)
     fun inject(downloadWorker: DownloadWorker)
     fun inject(notificationReceiver: NotificationReceiver)
     fun inject(notificationReceiver: SecureActivityDelegateImpl)
