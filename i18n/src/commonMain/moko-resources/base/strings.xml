@@ -29,6 +29,10 @@
     <string name="label_upcoming">Upcoming</string>
     <string name="label_recent_manga">History</string>
     <string name="label_sources">Sources</string>
+    <string name="pref_allow_source_progress_backwards">Let servers rewind my progress</string>
+    <string name="pref_allow_source_progress_backwards_summary">Off: progress from a server is only applied when it is ahead of this device. On: this device follows the server even when it is behind, such as after you re-read or reset a chapter there. Only affects progress-aware extensions.</string>
+    <string name="pref_source_progress_pull_ttl">Progress pull cache (seconds)</string>
+    <string name="pref_source_progress_pull_ttl_summary">How long a successful progress pull is reused before asking the server again. Applies to series and chapter opens. Higher values reduce network use for single-device reading.</string>
     <string name="label_backup">Backup and restore</string>
     <string name="label_data_storage">Data and storage</string>
     <string name="label_stats">Statistics</string>

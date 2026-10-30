@@ -65,6 +65,13 @@ class SourcePreferences(
 
     val hideInLibraryItems: Preference<Boolean> = preferenceStore.getBoolean("browse_hide_in_library_items", false)
 
+
+    /** Seconds to reuse a successful progress pull before contacting the source again. */
+    val sourceProgressPullTtlSeconds: Preference<String> = preferenceStore.getString(
+        "pref_source_progress_pull_ttl_seconds",
+        "60",
+    )
+
     val extensionRepos: Preference<Set<String>> = preferenceStore.getStringSet("extension_repos", emptySet())
 
     val extensionUpdatesCount: Preference<Int> = preferenceStore.getInt("ext_updates_count", 0)
