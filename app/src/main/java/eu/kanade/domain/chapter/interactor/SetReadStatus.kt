@@ -17,6 +17,8 @@ class SetReadStatus(
     private val deleteDownload: DeleteDownload,
     private val mangaRepository: MangaRepository,
     private val chapterRepository: ChapterRepository,
+    private val sourceManager: SourceManager,
+    private val sourceProgressSync: SourceProgressSync,
 ) {
 
     private val mapper = { chapter: Chapter, read: Boolean ->
