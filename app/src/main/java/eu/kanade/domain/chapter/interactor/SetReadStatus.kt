@@ -2,6 +2,11 @@ package eu.kanade.domain.chapter.interactor
 
 import dev.zacsweers.metro.Inject
 import eu.kanade.domain.download.interactor.DeleteDownload
+import eu.kanade.domain.manga.model.toSManga
+import eu.kanade.domain.source.service.SourceProgressSync
+import eu.kanade.tachiyomi.source.ProgressAwareSource
+import eu.kanade.tachiyomi.source.model.ChapterProgress
+import kotlinx.coroutines.CancellationException
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
@@ -10,6 +15,7 @@ import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.source.service.SourceManager
 
 @Inject
 class SetReadStatus(

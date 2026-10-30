@@ -259,7 +259,7 @@ class SourceProgressSync(
             localPageIndex = localPageIndex,
             localCompleted = localCompleted,
             remote = outcome.remote,
-            localLastModified = chapter.lastModifiedAt.toEpochMilliseconds(),
+            localLastModified = localProgressClock(mangaId, chapter.url),
             initialSync = !hasCompletedInitialSync(mangaId),
         )
         if (merged.acceptRemote) {
@@ -331,7 +331,7 @@ class SourceProgressSync(
                 localPageIndex = chapter.lastPageRead,
                 localCompleted = chapter.read,
                 remote = remote,
-                localLastModified = chapter.lastModifiedAt.toEpochMilliseconds(),
+                localLastModified = localProgressClock(mangaId, chapter.url),
                 initialSync = !hasCompletedInitialSync(mangaId),
             )
             if (!merged.acceptRemote) {
@@ -340,7 +340,7 @@ class SourceProgressSync(
                         chapterUrl = chapter.url,
                         pageIndex = chapter.lastPageRead,
                         completed = chapter.read,
-                        lastModified = chapter.lastModifiedAt.toEpochMilliseconds()
+                        lastModified = localProgressClock(mangaId, chapter.url)
                             .takeIf { it > 0L } ?: System.currentTimeMillis(),
                     )
                 }
