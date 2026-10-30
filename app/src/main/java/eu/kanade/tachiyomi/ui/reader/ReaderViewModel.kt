@@ -22,7 +22,9 @@ import eu.kanade.domain.manga.interactor.SetMangaViewerFlags
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.readerOrientation
 import eu.kanade.domain.manga.model.readingMode
+import eu.kanade.domain.manga.model.toSManga
 import eu.kanade.domain.source.interactor.GetIncognitoState
+import eu.kanade.domain.source.service.SourceProgressSync
 import eu.kanade.domain.track.interactor.TrackChapter
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.tachiyomi.data.cache.ChapterCache
@@ -34,7 +36,9 @@ import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.data.saver.Image
 import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.data.saver.Location
+import eu.kanade.tachiyomi.source.ProgressAwareSource
 import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.source.model.ChapterProgress
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.reader.loader.ChapterLoader
@@ -129,6 +133,7 @@ class ReaderViewModel(
     private val coverCache: CoverCache,
     private val chapterCache: ChapterCache,
     private val downloadCache: DownloadCache,
+    private val sourceProgressSync: SourceProgressSync,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -297,6 +302,8 @@ class ReaderViewModel(
     }
 
     private var incognitoMode: Boolean = false
+    private val rereadingChapterIds = mutableSetOf<Long>()
+
     private val downloadAheadAmount = downloadPreferences.autoDownloadWhileReading.get()
 
     init {
@@ -321,6 +328,7 @@ class ReaderViewModel(
     }
 
     override fun onCleared() {
+        flushSourceProgress()
         val currentChapters = state.value.viewerChapters
         if (currentChapters != null) {
             currentChapters.unref()
@@ -336,7 +344,15 @@ class ReaderViewModel(
      * trigger deletion of the downloaded chapters.
      */
     fun onActivityFinish() {
+        flushSourceProgress()
         deletePendingChapters()
+    }
+
+    private fun flushSourceProgress() {
+        if (incognitoMode) return
+        val m = manga ?: return
+        val progressSource = source as? ProgressAwareSource ?: return
+        sourceProgressSync.flushAsync(progressSource, m.toSManga(), m.id)
     }
 
     /**
@@ -365,7 +381,29 @@ class ReaderViewModel(
                 )
 
                 chapterList = loadChapterList()
-                loadChapter(loader!!, chapterList.first { chapterId == it.chapter.id })
+                val initialReaderChapter = chapterList.first { chapterId == it.chapter.id }
+                val progressSource = source as? ProgressAwareSource
+                if (progressSource != null && initialReaderChapter.chapter.read) {
+                    rereadingChapterIds.add(initialReaderChapter.chapter.id)
+                    initialReaderChapter.update { it.copy(lastPageRead = 0) }
+                    initialReaderChapter.requestedPage = 0
+                } else if (progressSource != null && !incognitoMode) {
+                    val domainChapter = initialReaderChapter.chapter
+                    val pulled = sourceProgressSync.pullForReaderOpen(
+                        source = progressSource,
+                        manga = manga.toSManga(),
+                        mangaId = manga.id,
+                        chapter = domainChapter,
+                        localPageIndex = domainChapter.lastPageRead,
+                        localCompleted = domainChapter.read,
+                        sourceId = manga.source,
+                    )
+                    initialReaderChapter.update {
+                        it.copy(lastPageRead = pulled.pageIndex, read = pulled.completed)
+                    }
+                    initialReaderChapter.requestedPage = pulled.pageIndex
+                }
+                loadChapter(loader!!, initialReaderChapter)
             } catch (e: Throwable) {
                 if (e is CancellationException) {
                     throw e
@@ -702,6 +740,29 @@ class ReaderViewModel(
                         lastPageRead = chapter.lastPageRead
                     },
                 )
+
+                val m = manga
+                if (m != null && !incognitoMode) {
+                    val isRereadSession = chapter.id in rereadingChapterIds
+                    val progressSource = source as? ProgressAwareSource
+                    // pageIndex 0 + incomplete is reserved for explicit mark-unread.
+                    if (progressSource != null && !isRereadSession &&
+                        (chapter.read || chapter.lastPageRead > 0)
+                    ) {
+                        sourceProgressSync.enqueue(
+                            m.id,
+                            m.source,
+                            ChapterProgress(
+                                chapterUrl = chapter.url,
+                                pageIndex = chapter.lastPageRead,
+                                completed = chapter.read,
+                            ),
+                        )
+                        if (chapter.read) {
+                            sourceProgressSync.flushAsync(progressSource, m.toSManga(), m.id)
+                        }
+                    }
+                }
             }
         }
     }
