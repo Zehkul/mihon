@@ -6,6 +6,8 @@
 -keep class eu.kanade.tachiyomi.source.ConfigurableSource { public protected *; }
 -keep class eu.kanade.tachiyomi.source.SourceFactory { public protected *; }
 -keep class eu.kanade.tachiyomi.source.UnmeteredSource { public protected *; }
+-keep class eu.kanade.tachiyomi.source.ProgressAwareSource { public protected *; }
+-keep class eu.kanade.tachiyomi.source.ProgressAwareSource$DefaultImpls { public protected *; }
 -keep class eu.kanade.tachiyomi.source.model.Filter { public protected *; }
 -keep class eu.kanade.tachiyomi.source.model.Filter$* { public protected *; }
 -keep class eu.kanade.tachiyomi.source.model.FilterList { public protected *; }
@@ -17,6 +19,7 @@
 -keep class eu.kanade.tachiyomi.source.model.SManga$Companion { public protected *; }
 -keep class eu.kanade.tachiyomi.source.model.SMangaUpdate { public protected *; }
 -keep class eu.kanade.tachiyomi.source.model.UpdateStrategy { public protected *; }
+-keep class eu.kanade.tachiyomi.source.model.ChapterProgress { public protected *; }
 -keep class eu.kanade.tachiyomi.source.online.HttpSource { public protected *; }
 -keep class eu.kanade.tachiyomi.source.online.ParsedHttpSource { public protected *; }
 
