@@ -2,6 +2,11 @@ package eu.kanade.domain.chapter.interactor
 
 import dev.zacsweers.metro.Inject
 import eu.kanade.domain.download.interactor.DeleteDownload
+import eu.kanade.domain.manga.model.toSManga
+import eu.kanade.domain.source.service.SourceProgressSync
+import eu.kanade.tachiyomi.source.ProgressAwareSource
+import eu.kanade.tachiyomi.source.model.ChapterProgress
+import kotlinx.coroutines.CancellationException
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
@@ -10,6 +15,7 @@ import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.source.service.SourceManager
 
 @Inject
 class SetReadStatus(
@@ -17,6 +23,8 @@ class SetReadStatus(
     private val deleteDownload: DeleteDownload,
     private val mangaRepository: MangaRepository,
     private val chapterRepository: ChapterRepository,
+    private val sourceManager: SourceManager,
+    private val sourceProgressSync: SourceProgressSync,
 ) {
 
     private val mapper = { chapter: Chapter, read: Boolean ->
@@ -44,6 +52,33 @@ class SetReadStatus(
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)
             return Result.InternalError(e)
+        }
+
+        chaptersToUpdate.groupBy { it.mangaId }.forEach { (mangaId, changed) ->
+            val manga = mangaRepository.getMangaById(mangaId) ?: return@forEach
+            val source = sourceManager.get(manga.source) as? ProgressAwareSource ?: return@forEach
+            try {
+                val now = System.currentTimeMillis()
+                sourceProgressSync.enqueueAll(
+                    mangaId,
+                    manga.source,
+                    changed.map { chapter ->
+                        ChapterProgress(
+                            chapterUrl = chapter.url,
+                            pageIndex = if (read) chapter.lastPageRead.coerceAtLeast(0) else 0,
+                            completed = read,
+                            lastModified = now,
+                        )
+                    },
+                )
+                sourceProgressSync.flush(source, manga.toSManga(), mangaId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) {
+                    "${SourceProgressSync.LOG_TAG} SetReadStatus progress sync manga=$mangaId"
+                }
+            }
         }
 
         if (read && downloadPreferences.removeAfterMarkedAsRead.get()) {

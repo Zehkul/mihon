@@ -29,6 +29,8 @@ import eu.kanade.domain.manga.interactor.SetExcludedScanlators
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.chaptersFiltered
 import eu.kanade.domain.manga.model.downloadedFilter
+import eu.kanade.domain.manga.model.toSManga
+import eu.kanade.domain.source.service.SourceProgressSync
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.domain.track.interactor.RefreshTracks
 import eu.kanade.domain.track.interactor.TrackChapter
@@ -43,7 +45,9 @@ import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.source.ProgressAwareSource
 import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.source.model.ChapterProgress
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.removeCovers
@@ -139,6 +143,7 @@ class MangaViewModel(
     private val sourceManager: SourceManager,
     private val refreshTracks: RefreshTracks,
     private val coverCache: CoverCache,
+    private val sourceProgressSync: SourceProgressSync,
 ) : ViewModel() {
 
     private val subscriberGate = SubscriberGate()
@@ -328,6 +333,8 @@ class MangaViewModel(
                     fetchChapters = needRefreshChapter,
                 )
                 isRefreshingData.value = false
+            } else {
+                viewModelScope.launch(Dispatchers.IO) { syncSourceProgress() }
             }
         }
     }
@@ -376,6 +383,45 @@ class MangaViewModel(
 
             viewModelScope.launch {
                 snackbarHostState.showSnackbar(message = message)
+            }
+        } finally {
+            viewModelScope.launch(Dispatchers.IO) { syncSourceProgress() }
+        }
+    }
+
+    /** Pull/push source-owned page progress for ProgressAwareSource series. */
+    private suspend fun syncSourceProgress() {
+        val state = successState ?: return
+        val progressSource = state.source as? ProgressAwareSource
+        if (progressSource == null) {
+            logcat(LogPriority.DEBUG) {
+                "${SourceProgressSync.LOG_TAG} skip series sync; source is not ProgressAwareSource " +
+                    "(${state.source::class.qualifiedName})"
+            }
+            return
+        }
+        // Prefer DB so newly fetched chapters are included after a remote refresh.
+        val chapters = try {
+            getMangaAndChapters.awaitChapters(state.manga.id, applyScanlatorFilter = true)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            state.chapters.map { it.chapter }
+        }
+        if (chapters.isEmpty()) return
+        try {
+            sourceProgressSync.syncSeries(
+                source = progressSource,
+                manga = state.manga.toSManga(),
+                mangaId = state.manga.id,
+                chapters = chapters,
+                sourceId = state.manga.source,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) {
+                "${SourceProgressSync.LOG_TAG} series sync failed manga=${state.manga.id}"
             }
         }
     }
@@ -771,7 +817,7 @@ class MangaViewModel(
         toggleAllSelection(false)
         if (chapters.isEmpty()) return
         viewModelScope.launch {
-            // The read state is written even if the screen closes, the tracking prompt isn't
+            // Read state + ProgressAwareSource sync run on appScope via SetReadStatus
             appScope.launch {
                 setReadStatus.await(
                     read = read,
